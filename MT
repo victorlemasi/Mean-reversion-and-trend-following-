@@ -1,0 +1,72 @@
+# Copyright 2024, MetaQuotes Ltd.
+# https://www.mql5.com
+
+from datetime import datetime
+import MetaTrader5 as mt5
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize MetaTrader 5
+mt5.initialize()
+
+# Fetch historical stock data using Yahoo Finance
+ticker = "AAPL"  # Replace with your desired stock symbol
+data = yf.download(ticker, start="2023-01-01", end="2023-12-01", interval="1d")
+data = data[['Adj Close']].rename(columns={'Adj Close': 'Price'})
+
+# Set the 6-month window size (approx. 126 trading days)
+window_size = 126
+
+# Calculate indicators for Mean Reversion
+data['SMA'] = data['Price'].rolling(window=window_size).mean()
+data['StdDev'] = data['Price'].rolling(window=window_size).std()
+data['UpperBand'] = data['SMA'] + 2 * data['StdDev']
+data['LowerBand'] = data['SMA'] - 2 * data['StdDev']
+
+# Calculate indicators for Market Trend
+short_window = 42  # 2-month moving average
+long_window = 126  # 6-month moving average
+data['ShortSMA'] = data['Price'].rolling(window=short_window).mean()
+data['LongSMA'] = data['Price'].rolling(window=long_window).mean()
+
+# Plot indicators
+plt.figure(figsize=(14, 8))
+
+# Mean Reversion plot
+plt.subplot(2, 1, 1)
+plt.plot(data['Price'], label='Price', color='blue')
+plt.plot(data['SMA'], label='SMA (6 Months)', color='green')
+plt.plot(data['UpperBand'], label='Upper Band', color='red')
+plt.plot(data['LowerBand'], label='Lower Band', color='red')
+plt.title('Mean Reversion Strategy')
+plt.legend()
+
+# Market Trend plot
+plt.subplot(2, 1, 2)
+plt.plot(data['Price'], label='Price', color='blue')
+plt.plot(data['ShortSMA'], label='Short SMA (2 Months)', color='orange')
+plt.plot(data['LongSMA'], label='Long SMA (6 Months)', color='green')
+plt.title('Market Trend Strategy')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# Strategy Logic
+print("\n--- Mean Reversion Strategy Signals ---")
+for i in range(window_size, len(data)):
+    if data['Price'].iloc[i] < data['LowerBand'].iloc[i]:
+        print(f"Buy at {data['Price'].iloc[i]} (below lower band on {data.index[i]})")
+    elif data['Price'].iloc[i] > data['UpperBand'].iloc[i]:
+        print(f"Sell at {data['Price'].iloc[i]} (above upper band on {data.index[i]})")
+
+print("\n--- Market Trend Strategy Signals ---")
+for i in range(long_window, len(data)):
+    if data['ShortSMA'].iloc[i] > data['LongSMA'].iloc[i]:
+        print(f"Trend is UP. Consider buying at {data['Price'].iloc[i]} (on {data.index[i]})")
+    elif data['ShortSMA'].iloc[i] < data['LongSMA'].iloc[i]:
+        print(f"Trend is DOWN. Consider selling at {data['Price'].iloc[i]} (on {data.index[i]})")
+
+# Shutdown MetaTrader 5
+mt5.shutdown()
